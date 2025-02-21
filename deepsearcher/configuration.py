@@ -78,7 +78,7 @@ class ModuleFactory:
         return self._create_module_instance("vector_db", "deepsearcher.vector_db")
     
 
-config = Configuration()
+# config = Configuration()
 
 module_factory: ModuleFactory = None
 llm: BaseLLM = None
