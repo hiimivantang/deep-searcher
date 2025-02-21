@@ -47,11 +47,25 @@ def get_final_answer_prompt(
     mini_chunk_str = ""
     for i, chunk in enumerate(mini_chuncks):
         mini_chunk_str += f"""<chunk_{i}>\n{chunk}\n</chunk_{i}>\n"""
-    summary_prompt = f"""You are a AI content analysis expert, good at summarizing content. Please summarize a specific and detailed answer or report based on the previous queries and the retrieved document chunks.
+    #summary_prompt = f"""You are a AI content analysis expert, good at summarizing content. Please summarize a specific and detailed answer or report based on the previous queries and the retrieved document chunks.
+
+    #Original Query: {question}
+    #Previous Sub Queries: {mini_questions}
+    #Related Chunks: 
+    #{mini_chunk_str}
+    #"""
+
+
+    summary_prompt = f"""You're a meticulous analyst with a keen eye for detail.  You're known for your ability to turn complex data into clear and concise reports, making it easy for others to understand and act on the information you provide.Create detailed reports based on the previous queries and the retrieved document chunks. If possible do generate an ascii art architecture diagram of how it works.
 
     Original Query: {question}
     Previous Sub Queries: {mini_questions}
     Related Chunks: 
     {mini_chunk_str}
     """
+
+
+
+
+
     return summary_prompt
