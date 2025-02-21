@@ -58,7 +58,7 @@ async def async_retrieve(
         return [], []
     else:
         log.color_print(
-            f"<think> Break down the original query into new sub queries: {sub_queries}</think>\n"
+            f"<think> Break down the original query into new sub queries: \n\t{'\n\t'.join(sub_queries)}</think>\n"
         )
     all_sub_queries.extend(sub_queries)
     sub_gap_queries = sub_queries
