@@ -3,7 +3,7 @@ from typing import List
 
 from deepsearcher.agent.prompt import get_vector_db_search_prompt
 
-# from deepsearcher.configuration import llm, embedding_model, vector_db
+# from deepsearcher.configuration import llm, embedding_model, vector_db 
 from deepsearcher import configuration
 from deepsearcher.tools import log
 
@@ -51,12 +51,12 @@ async def search_chunks_from_vectordb(query: str, sub_queries: List[str]):
         if vector_db.default_collection == collection_info.collection_name:
             collection_2_query[collection_info.collection_name] = query
     log.color_print(
-        f"<think> Perform search [{query}] on the vector DB collections: {list(collection_2_query.keys())} </think>\n"
+        f"<THINK> Perform search [{query}] on the vector DB collections: {list(collection_2_query.keys())} </THINK>\n"
     )
     all_retrieved_results = []
     for collection, col_query in collection_2_query.items():
         log.color_print(
-            f"<search> Search [{col_query}] in [{collection}]...  </search>\n"
+            f"\U0001F50D Search [{col_query}] in [{collection}]...\n"
         )
         retrieved_results = vector_db.search_data(
             collection=collection, vector=embedding_model.embed_query(col_query)
@@ -83,7 +83,7 @@ async def search_chunks_from_vectordb(query: str, sub_queries: List[str]):
                 references.append(retrieved_result.reference)
         if accepted_chunk_num > 0:
             log.color_print(
-                f"<search> Accept {accepted_chunk_num} document chunk(s) from references: {references} </search>\n"
+                f"\U00002705 Accept {accepted_chunk_num} document chunk(s) from references: \n\t{'\n\t'.join(references)}\n\n\n"
             )
     return all_retrieved_results, consume_tokens
 
