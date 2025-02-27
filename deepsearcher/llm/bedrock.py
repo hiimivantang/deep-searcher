@@ -1,39 +1,58 @@
 import os
 import json
-from typing import Dict, List
+from typing import Dict, List, Union
 import boto3
 from deepsearcher.llm.base import BaseLLM, ChatResponse
 
 class Bedrock(BaseLLM):
-    def __init__(self, model_id: str = "amazon.nova-pro-v1:0", **kwargs):
-        self.model_id = model_id
+    def __init__(self, model: str = "amazon.nova-lite-v1:0", **kwargs):
+        self.model = model
+
+        aws_access_key_id = kwargs.pop("aws_access_key_id", os.getenv("AWS_ACCESS_KEY_ID"))
+        aws_secret_access_key = kwargs.pop("aws_secret_access_key", os.getenv("AWS_SECRET_ACCESS_KEY"))
+
         self.client = boto3.client(
             service_name="bedrock-runtime",
-            region_name=kwargs.get("region_name", os.getenv("AWS_DEFAULT_REGION", "us-east-1")),
-            aws_access_key_id=kwargs.get("aws_access_key_id", os.getenv("AWS_ACCESS_KEY_ID")),
-            aws_secret_access_key=kwargs.get("aws_secret_access_key", os.getenv("AWS_SECRET_ACCESS_KEY")),
+            region_name="us-east-1", #FIXME
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
         )
+    
+    def __str__(self):
+        return self.model
+        
+    def format_prompt_content(self, content: str) -> Union[str, List[Dict]]:
+        """Format prompt content specifically for Bedrock models like Nova"""
+        if self.model in ["amazon.nova-lite-v1:0", "us.amazon.nova-lite-v1:0", "amazon.nova-pro-v1:0","amazon.nova-micro-v1:0"]:
+            return [{'text': content}]
+        return content
+        
+    def create_user_message(self, content: Union[str, List[Dict]]) -> Dict:
+        """Create a properly formatted user message for Bedrock models"""
+        return {"role": "user", "content": content}
 
-    def chat(self, messages: List[Dict]) -> ChatResponse:
-        # Prepare the messages in the required format
-        formatted_messages = [{"role": msg["role"], "content": [{"text": msg["content"]}]} for msg in messages]
-
-        # Define inference parameters if needed
+    def chat(self, messages: List[Dict]) -> ChatResponse:        
         inference_config = {
-            "maxTokens": 500,  # Adjust as needed
+            "maxTokens": 5000,  # Adjust as needed
             "temperature": 0.7,  # Adjust as needed
             # Add other parameters as required
         }
-
-        # Make the API call to Amazon Bedrock
-        response = self.client.converse(
-            modelId=self.model_id,
+        
+        # Format the messages properly for Bedrock
+        formatted_messages = []
+        for message in messages:
+            if message["role"] == "user":
+                # Apply content formatting for user messages
+                content = self.format_prompt_content(message["content"])
+                formatted_messages.append({"role": "user", "content": content})
+            else:
+                formatted_messages.append(message)
+        
+        completion = self.client.converse(
+            modelId=self.model, 
             messages=formatted_messages,
-            inferenceConfig=inference_config,
-        )
-
-        # Extract the response content
-        content = response["output"]["message"]["content"][0]["text"]
-        total_tokens = response["usage"]["totalTokens"]
-
+            inferenceConfig=inference_config)
+        
+        content = completion["output"]["message"]["content"][0]["text"]
+        total_tokens = completion['usage']['totalTokens']
         return ChatResponse(content=content, total_tokens=total_tokens)

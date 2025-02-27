@@ -41,10 +41,17 @@ def main():
         help="Destination collection name of loaded knowledge.",
     )
 
-
+    parser.add_argument(
+         '--output', 
+         type=str, 
+         default='deep-searcher-report.md',
+         help='Path to the output file')
+    
     args = parser.parse_args()
     if args.query:
-        query(args.query, max_iter=args.max_iter)
+        output_tuple = query(args.query, max_iter=args.max_iter)
+        with open(args.output, 'w') as f:
+            f.write(output_tuple[0])
     else:
         if args.load:
             if args.load.startswith("http"):

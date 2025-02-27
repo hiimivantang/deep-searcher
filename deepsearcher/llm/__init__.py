@@ -5,6 +5,7 @@ from .siliconflow import SiliconFlow
 from .azure_openai import AzureOpenAI
 from .gemini import Gemini
 from .grok import Grok
+from .bedrock import Bedrock
 
 __all__ = [
     "DeepSeek",
