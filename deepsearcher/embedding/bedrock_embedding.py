@@ -50,7 +50,13 @@ class BedrockEmbedding(BaseEmbedding):
         return embedding
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return [self.embed_query(text) for text in texts]
+        # Use parallel processing for better performance
+        import concurrent.futures
+        
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            embeddings = list(executor.map(self.embed_query, texts))
+        
+        return embeddings
 
     @property
     def dimension(self) -> int:
