@@ -1,0 +1,37 @@
+provide_settings:
+  llm:
+    provider: "Bedrock"
+    config:
+      model: "amazon.nova-micro-v1:0"  
+      aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
+      aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
+
+  embedding:
+    provider: "BedrockEmbedding"
+    config:
+      model: "amazon.titan-embed-text-v2:0"
+      aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
+      aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
+
+  file_loader:
+    provider: "PDFLoader"
+    config: {}
+
+  web_crawler:
+    provider: "FireCrawlCrawler"
+    config: {}
+
+  vector_db:
+    provider: "Milvus"
+    config:
+      default_collection: "deepsearcher"
+      uri: "YOUR_ZILLIZ_ENDPOINT"
+      token: "YOUR_ZILLIZ_TOKEN"
+      db: "default"
+
+query_settings:
+  max_iter: 3
+
+load_settings:
+  chunk_size: 1500
+  chunk_overlap: 100
