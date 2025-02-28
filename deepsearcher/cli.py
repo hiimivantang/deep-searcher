@@ -55,9 +55,9 @@ def main():
     else:
         if args.load:
             if args.load.startswith("http"):
-                load_from_website(args.load)
+                load_from_website(args.load, collection_name=args.collection_name)
             else:
-                load_from_local_files(args.load)
+                load_from_local_files(args.load, collection_name=args.collection_name)
         else:
             print("Please provide a query or a load argument.")
 
