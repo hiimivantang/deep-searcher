@@ -243,9 +243,31 @@ deepsearcher --help
 You can configure all arguments by modifying [config.yaml](./config.yaml) to set up your system with default modules.
 For example, set your `OPENAI_API_KEY` in the `llm` section of the YAML file.
 
-#### Using the React Frontend
+#### Using Docker (Recommended)
 
-DeepSearcher now includes a modern React frontend for a more intuitive user experience, perfect for demos and workshops.
+The easiest way to run DeepSearcher is using Docker:
+
+```shell
+# Build and run with Docker Compose
+docker-compose up -d
+```
+
+This will:
+1. Build the Docker image with both frontend and backend
+2. Mount your local config.yaml file so you can easily change settings
+3. Expose the application on http://localhost:8000
+
+To update the configuration, edit config.yaml and restart:
+
+```shell
+docker-compose restart
+```
+
+#### Manual Deployment
+
+##### Using the React Frontend
+
+DeepSearcher includes a modern React frontend for a more intuitive user experience, perfect for demos and workshops.
 
 To run the frontend with the backend:
 
@@ -268,7 +290,7 @@ python main.py
 
 In production mode, both frontend and API will be served from a single endpoint (http://localhost:8000).
 
-#### API Only Mode
+##### API Only Mode
 
 You can still run just the backend API service:
 
@@ -276,7 +298,7 @@ You can still run just the backend API service:
 $ python main.py
 ```
 
-#### Access via API browser
+##### Access via API browser
 
 You can open url http://localhost:8000/docs in browser to access the API documentation.
 Click on the button "Try it out", it allows you to fill the parameters and directly interact with the API.

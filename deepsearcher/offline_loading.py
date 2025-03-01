@@ -45,13 +45,44 @@ def load_from_local_files(
     # Get all file paths first, expanding directories
     all_file_paths = []
     for path in paths_or_directory:
+        # Check if path exists
+        if not os.path.exists(path):
+            print(f"Warning: Path does not exist: {path}")
+            continue
+            
         if os.path.isdir(path):
-            for file in os.listdir(path):
+            # Check if directory is empty
+            files = os.listdir(path)
+            if not files:
+                print(f"Warning: Directory is empty: {path}")
+                continue
+                
+            # Check for supported files in directory
+            has_supported_files = False
+            for file in files:
                 file_path = os.path.join(path, file)
-                if os.path.isfile(file_path) and any(file.endswith(suffix) for suffix in file_loader.supported_file_types):
+                file_ext = os.path.splitext(file)[1].lower().lstrip('.')
+                if os.path.isfile(file_path) and (file_ext in file_loader.supported_file_types or 
+                                                 any(file.endswith(f".{suffix}") for suffix in file_loader.supported_file_types)):
                     all_file_paths.append(file_path)
+                    has_supported_files = True
+                    
+            if not has_supported_files:
+                print(f"Warning: No supported files found in directory: {path}")
+                print(f"Supported file types: {file_loader.supported_file_types}")
         else:
-            all_file_paths.append(path)
+            # Check if file type is supported
+            file_ext = os.path.splitext(path)[1].lower().lstrip('.')
+            if file_ext in file_loader.supported_file_types or any(path.endswith(f".{suffix}") for suffix in file_loader.supported_file_types):
+                all_file_paths.append(path)
+            else:
+                print(f"Warning: Unsupported file type: {path}")
+                print(f"Supported file types: {file_loader.supported_file_types}")
+                
+    # Check if we found any files to process
+    if not all_file_paths:
+        print("Error: No valid files found to process")
+        return
     
     # Use multiprocessing for file loading
     all_docs = []
@@ -65,10 +96,19 @@ def load_from_local_files(
         for future in tqdm(as_completed(futures), total=len(futures), desc="Loading files"):
             try:
                 docs = future.result()
-                all_docs.extend(docs)
+                if docs is not None:
+                    all_docs.extend(docs)
+                else:
+                    path = futures[future]
+                    print(f"Warning: No documents returned for {path}")
             except Exception as e:
                 path = futures[future]
                 print(f"Error loading {path}: {e}")
+    
+    # Handle case where no documents were loaded
+    if not all_docs:
+        print("No documents were successfully loaded. Please check file formats and paths.")
+        return
     
     # print("Splitting docs to chunks...")
     chunks = split_docs_to_chunks(

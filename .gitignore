@@ -174,12 +174,8 @@ poetry.toml
 pyrightconfig.json
 
 ### VisualStudioCode ###
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
+.vscode/
+.github/
 
 # Local History for Visual Studio Code
 .history/
@@ -216,3 +212,35 @@ static/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Documents folder - only keep the README
+/documents/*
+!/documents/README.md
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+.~*
+._*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# PDF files (often large and binary)
+*.pdf
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Docker volumes
+docker-volumes/

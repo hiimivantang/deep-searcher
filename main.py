@@ -27,10 +27,10 @@ config_path = os.environ.get("CONFIG_PATH", "./config.yaml")
 config = Configuration(config_path)
 init_config(config)
 
-# Mount React static files - uncomment after building the frontend
-# app.mount("/", StaticFiles(directory="./frontend/build", html=True), name="static")
+# All API routes are defined below
+# The static files mount will be done at the end of this file after all API routes are defined
 
-@app.post("/load-files/")
+@app.post("/load-files")
 def load_files(
     paths: Union[str, List[str]] = Body(..., description="A list of file paths to be loaded.", examples=["/path/to/file1", "/path/to/file2", "/path/to/dir1"]),
     collection_name: str = Body(None, description="Optional name for the collection.", examples=["my_collection"]),
@@ -42,7 +42,7 @@ def load_files(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/load-website/")
+@app.post("/load-website")
 def load_website(
     urls: Union[str, List[str]] = Body(..., description="A list of URLs of websites to be loaded.", examples=["https://milvus.io/docs/overview.md"]),
     collection_name: str = Body(None, description="Optional name for the collection.", examples=["my_collection"]),
@@ -54,7 +54,7 @@ def load_website(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/query/")
+@app.get("/query")
 def perform_query(
     original_query: str = Query(..., description="Your question here.", examples=["Write a report about Milvus."]),
     max_iter: int = Query(3, description="The maximum number of iterations for reflection.", ge=1, examples=[3])
@@ -68,7 +68,7 @@ def perform_query(
         # Return error as result instead of HTTP error
         return {"result": error_message}
 
-@app.get("/naive-query/")
+@app.get("/naive-query")
 def perform_naive_query(
     query: str = Query(..., description="Your question here.", examples=["What is Milvus?"]),
     collection: str = Query(None, description="Optional collection to search in.")
@@ -82,7 +82,7 @@ def perform_naive_query(
         # Return error as result instead of HTTP error
         return {"result": error_message}
 
-@app.get("/collections/")
+@app.get("/collections")
 def get_collections():
     try:
         from deepsearcher import configuration
@@ -99,7 +99,7 @@ def get_collections():
         # Return empty list instead of error for better UX
         return []
 
-@app.get("/config/")
+@app.get("/config")
 def get_config():
     try:
         with open(config_path, "r") as file:
@@ -121,7 +121,7 @@ def get_config():
             "load_settings": {"chunk_size": 1500, "chunk_overlap": 100}
         }
 
-@app.post("/update-config/")
+@app.post("/update-config")
 def update_config(config_data: Dict[str, Any] = Body(...)):
     try:
         # Validate config structure
@@ -146,6 +146,10 @@ def update_config(config_data: Dict[str, Any] = Body(...)):
         if os.path.exists(backup_path):
             shutil.copy2(backup_path, config_path)
         raise HTTPException(status_code=500, detail=str(e))
+
+# Mount static files AFTER all API routes are defined
+# This ensures that API routes take precedence over static file serving
+app.mount("/", StaticFiles(directory="./frontend/build", html=True), name="static")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

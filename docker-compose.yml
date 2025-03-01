@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  deepsearcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/config/config.yaml
+      - ./documents:/data/documents
+    restart: unless-stopped

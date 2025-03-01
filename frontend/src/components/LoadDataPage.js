@@ -102,7 +102,7 @@ const LoadDataPage = () => {
     setLoading(true);
     
     try {
-      const response = await axios.post('/load-files/', {
+      const response = await axios.post('/load-files', {
         paths: validFilePaths.length === 1 ? validFilePaths[0] : validFilePaths,
         collection_name: fileCollectionName || undefined,
         collection_description: fileCollectionDescription || undefined,
@@ -149,7 +149,7 @@ const LoadDataPage = () => {
     setLoading(true);
     
     try {
-      const response = await axios.post('/load-website/', {
+      const response = await axios.post('/load-website', {
         urls: validUrls.length === 1 ? validUrls[0] : validUrls,
         collection_name: urlCollectionName || undefined,
         collection_description: urlCollectionDescription || undefined,

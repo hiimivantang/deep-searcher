@@ -94,7 +94,7 @@ async def search_chunks_from_vectordb(query: str, sub_queries: List[str]):
                 references.append(retrieved_result.reference)
         if accepted_chunk_num > 0:
             log.color_print(
-                f"\U00002705 Accept {accepted_chunk_num} document chunk(s) from references: \n\t{'\n\t'.join(references)}\n\n\n"
+                f"\U00002705 Accept {accepted_chunk_num} document chunk(s) from references: \n\t{'\n' + '\t'.join(references)}\n\n\n"
             )
     return all_retrieved_results, consume_tokens
 
