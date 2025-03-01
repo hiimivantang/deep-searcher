@@ -243,16 +243,42 @@ deepsearcher --help
 You can configure all arguments by modifying [config.yaml](./config.yaml) to set up your system with default modules.
 For example, set your `OPENAI_API_KEY` in the `llm` section of the YAML file.
 
-#### Start service
-The main script will run a FastAPI service with default address `localhost:8000`.
+#### Using the React Frontend
+
+DeepSearcher now includes a modern React frontend for a more intuitive user experience, perfect for demos and workshops.
+
+To run the frontend with the backend:
+
+```shell
+# Run both frontend and backend in development mode
+./run_app.sh
+```
+
+The frontend will be available at http://localhost:3000 and the backend at http://localhost:8000.
+
+For production deployment:
+
+```shell
+# Build the production version
+./build_prod.sh
+
+# Run the application (serves frontend from static files)
+python main.py
+```
+
+In production mode, both frontend and API will be served from a single endpoint (http://localhost:8000).
+
+#### API Only Mode
+
+You can still run just the backend API service:
 
 ```shell
 $ python main.py
 ```
 
-#### Access via browser
+#### Access via API browser
 
-You can open url http://localhost:8000/docs in browser to access the web service.
+You can open url http://localhost:8000/docs in browser to access the API documentation.
 Click on the button "Try it out", it allows you to fill the parameters and directly interact with the API.
 
 
@@ -326,5 +352,6 @@ nest_asyncio.apply()
 - Support more vector databases (e.g., FAISS...)
 - Add support for additional large models
 - Provide RESTful API interface (**DONE**)
+- Modern React frontend for easy usage (**DONE**)
 
 We welcome contributions! Star & Fork the project and help us build a more powerful DeepSearcher! 🎯
