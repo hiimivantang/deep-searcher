@@ -2,12 +2,15 @@ version: '3'
 
 services:
   deepsearcher:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: deep-searcher:progress-ui-enhanced
     ports:
       - "8000:8000"
     volumes:
       - ./config.yaml:/config/config.yaml
       - ./documents:/data/documents
     restart: unless-stopped
+    # Add memory limits to prevent segmentation faults
+    deploy:
+      resources:
+        limits:
+          memory: 4G

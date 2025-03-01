@@ -1,4 +1,5 @@
 import os
+import time
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Union, Tuple
@@ -32,7 +33,21 @@ def load_from_local_files(
     # Enable progress logging regardless of dev mode
     log.set_dev_mode(True)
     
-    log.color_print(f"🔄 Starting data loading process...")
+    # Generate a unique task ID for tracking progress
+    task_id = f"files_{int(time.time())}"
+    
+    # Set default max_workers to CPU count minus 1
+    cpu_count = multiprocessing.cpu_count()
+    default_workers = max(1, cpu_count - 1)
+    
+    # Check if we're in Docker - if so, be more conservative with resources
+    in_docker = os.path.exists('/.dockerenv')
+    if max_workers is None:
+        max_workers = default_workers
+        if in_docker:
+            log.color_print(f"🐳 Docker environment detected, using {max_workers} workers (1 less than {cpu_count} CPU cores)", task_id=task_id)
+    
+    log.color_print(f"🔄 Starting data loading process...", task_id=task_id)
     
     vector_db = configuration.vector_db
     if collection_name is None:
@@ -41,7 +56,7 @@ def load_from_local_files(
     embedding_model = configuration.embedding_model
     file_loader = configuration.file_loader
     
-    log.color_print(f"✅ Initializing vector database collection: {collection_name}")
+    log.color_print(f"✅ Initializing vector database collection: {collection_name}", task_id=task_id)
     vector_db.init_collection(
         dim=embedding_model.dimension,
         collection=collection_name,
@@ -52,7 +67,7 @@ def load_from_local_files(
         paths_or_directory = [paths_or_directory]
     
     # Get all file paths first, expanding directories
-    log.color_print(f"🔍 Scanning for files to process...")
+    log.color_print(f"🔍 Scanning for files to process...", task_id=task_id)
     all_file_paths = []
     supported_files_count = 0
     unsupported_files_count = 0
@@ -113,7 +128,11 @@ def load_from_local_files(
     log.color_print(f"📊 File scan complete: {supported_files_count} supported files found, {unsupported_files_count} unsupported files skipped")
     
     # Use multiprocessing for file loading
-    log.color_print(f"📚 Starting file loading with {max_workers if max_workers else multiprocessing.cpu_count() - 1} workers...")
+    log.color_print(f"📚 Starting file loading with {max_workers if max_workers else multiprocessing.cpu_count() - 1} workers...", task_id=task_id, progress_type="loading")
+    
+    # Add status message for number of files
+    log.color_print(f"📚 Found {len(all_file_paths)} files to process", task_id=f"{task_id}_count", progress_type="loading")
+    
     all_docs = []
     if max_workers is None:
         max_workers = max(1, multiprocessing.cpu_count() - 1)  # Leave one core free
@@ -129,7 +148,7 @@ def load_from_local_files(
         completed = 0
         
         # Initial progress message
-        log.inline_progress(f"📚 Loading files: 0/{total_files} (0%)")
+        log.inline_progress(f"📚 Loading files: 0/{total_files} (0%)", task_id=task_id, progress_type="loading")
         
         for i, future in enumerate(as_completed(futures)):
             try:
@@ -143,11 +162,11 @@ def load_from_local_files(
                     
                     # Update progress inline
                     progress_pct = (completed / total_files) * 100
-                    log.inline_progress(f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)")
+                    log.inline_progress(f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)", task_id=task_id, progress_type="loading")
                     
                     # Additional details for periodic detailed updates
                     if i % 10 == 0 or i == total_files - 1:  # Less frequent detailed updates
-                        log.color_print(f"✅ Loaded file: {path} ({doc_count} documents)", same_line=False)
+                        log.color_print(f"✅ Loaded file: {path} ({doc_count} documents)", same_line=False, task_id=f"{task_id}_details")
                 else:
                     path = futures[future]
                     error_count += 1
@@ -184,25 +203,32 @@ def load_from_local_files(
     log.color_print(f"📄 Total documents extracted: {total_docs}")
     
     # Splitting documents into chunks
-    log.color_print(f"✂️ Splitting {total_docs} documents into chunks (size: {chunk_size}, overlap: {chunk_overlap})...")
+    log.color_print(f"✂️ Splitting {total_docs} documents into chunks (size: {chunk_size}, overlap: {chunk_overlap})...", 
+                    task_id=task_id, progress_type="chunking")
     chunks = split_docs_to_chunks(
         all_docs,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        task_id=task_id  # Pass task_id to the chunking function
     )
     
     chunk_count = len(chunks)
-    log.color_print(f"🧩 Created {chunk_count} chunks from {total_docs} documents")
+    log.color_print(f"🧩 Created {chunk_count} chunks from {total_docs} documents", 
+                    task_id=task_id, progress_type="chunking")
 
     # Embedding chunks
-    log.color_print(f"🔢 Generating embeddings for {chunk_count} chunks using {embedding_model.__class__.__name__}...")
-    chunks = embedding_model.embed_chunks(chunks)
-    log.color_print(f"✅ Successfully embedded {chunk_count} chunks")
+    log.color_print(f"🔢 Generating embeddings for {chunk_count} chunks using {embedding_model.__class__.__name__}...", 
+                    task_id=task_id, progress_type="embedding")
+    chunks = embedding_model.embed_chunks(chunks, task_id=task_id)  # Pass task_id to the embedding function
+    log.color_print(f"✅ Successfully embedded {chunk_count} chunks", 
+                    task_id=task_id, progress_type="embedding")
     
     # Inserting into vector database
-    log.color_print(f"💾 Inserting {chunk_count} chunks into vector database collection '{collection_name}'...")
+    log.color_print(f"💾 Inserting {chunk_count} chunks into vector database collection '{collection_name}'...",
+                    task_id=task_id, progress_type="storing")
     vector_db.insert_data(collection=collection_name, chunks=chunks)
-    log.color_print(f"🎉 Data loading complete! {chunk_count} chunks successfully stored in collection '{collection_name}'")
+    log.color_print(f"🎉 Data loading complete! {chunk_count} chunks successfully stored in collection '{collection_name}'",
+                   task_id=task_id, progress_type="complete")
     
     # Reset dev mode to original setting
     log.set_dev_mode(False)

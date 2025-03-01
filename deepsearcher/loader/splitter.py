@@ -2,6 +2,7 @@
 #  https://github.com/milvus-io/bootcamp/blob/master/bootcamp/RAG/advanced_rag/sentence_window_with_langchain.ipynb
 
 from typing import List
+import time
 from langchain_core.documents import Document
 from tqdm import tqdm
 from deepsearcher.tools import log
@@ -40,7 +41,7 @@ def _sentence_window_split(
 
 
 
-def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chunk_overlap=100) -> List[Chunk]:
+def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chunk_overlap=100, task_id="default") -> List[Chunk]:
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     all_chunks = []
     
@@ -50,7 +51,7 @@ def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chun
     
     # Initialize progress
     try:
-        log.inline_progress(f"✂️ Splitting: 0/{total_docs} documents (0%)")
+        log.inline_progress(f"✂️ Splitting: 0/{total_docs} documents (0%)", task_id=task_id, progress_type="chunking")
     except:
         pass
     
@@ -67,13 +68,22 @@ def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chun
         # Only log if log module is imported and available
         try:
             # Update progress inline for every document
-            log.inline_progress(f"✂️ Splitting: {i+1}/{total_docs} documents ({progress_pct:.1f}%) - {total_chunks} total chunks")
+            log.inline_progress(
+                f"✂️ Splitting: {i+1}/{total_docs} documents ({progress_pct:.1f}%) - {total_chunks} total chunks",
+                task_id=task_id,
+                progress_type="chunking"
+            )
             
             # Print detailed updates periodically
             if (i + 1) % max(1, total_docs // 10) == 0 or i == total_docs - 1:
-                log.color_print(f"   ↳ +{new_chunks} chunks from document {i+1}/{total_docs}", same_line=False)
-        except:
-            pass  # Skip logging if log module not available
+                log.color_print(
+                    f"   ↳ +{new_chunks} chunks from document {i+1}/{total_docs}", 
+                    same_line=False,
+                    task_id=f"{task_id}_detail",
+                    progress_type="chunking"
+                )
+        except Exception as e:
+            print(f"Error updating chunk progress: {e}")  # For debugging
             
     # Finish with a newline
     try:

@@ -1,14 +1,17 @@
-from fastapi import FastAPI, HTTPException, Body, Query, Depends
+from fastapi import FastAPI, HTTPException, Body, Query, Depends, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Union, Dict, Any
 import os
 import shutil
 import yaml
+import json
+import asyncio
 from deepsearcher.configuration import Configuration, init_config
 from deepsearcher.offline_loading import load_from_local_files, load_from_website
 from deepsearcher.online_query import query, naive_rag_query
 from deepsearcher.vector_db.base import BaseVectorDB
+from deepsearcher.tools import log
 import uvicorn
 
 app = FastAPI()
@@ -26,6 +29,67 @@ app.add_middleware(
 config_path = os.environ.get("CONFIG_PATH", "./config.yaml")
 config = Configuration(config_path)
 init_config(config)
+
+# WebSocket connection manager for progress updates
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception:
+                # Remove dead connections
+                self.active_connections = [
+                    conn for conn in self.active_connections 
+                    if conn != connection
+                ]
+                
+manager = ConnectionManager()
+
+# Progress update callback
+def progress_callback(progress_data):
+    if manager.active_connections:
+        # We can't use await directly in a non-async function, so create a task
+        # Add debug information
+        print(f"Progress update received: {len(progress_data)} tasks")
+        for task_id, task in progress_data.items():
+            print(f"Task {task_id}: {task.get('type', 'unknown')} - {task.get('message', 'no message')}")
+        
+        asyncio.create_task(manager.broadcast(json.dumps(progress_data)))
+
+# Register the callback with the log module
+log.register_progress_callback(progress_callback)
+
+# WebSocket route for progress updates
+@app.websocket("/ws/progress")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    
+    # Send current progress status immediately upon connection
+    current_status = log.get_progress_status()
+    if current_status:
+        await websocket.send_text(json.dumps(current_status))
+    
+    try:
+        while True:
+            # Keep connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        
+# Endpoint to get current progress status
+@app.get("/progress")
+def get_progress():
+    return log.get_progress_status()
 
 # All API routes are defined below
 # The static files mount will be done at the end of this file after all API routes are defined

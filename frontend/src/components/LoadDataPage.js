@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -13,14 +13,181 @@ import {
   CircularProgress,
   Divider,
   Chip,
+  LinearProgress,
+  Card,
+  CardContent,
+  IconButton,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
   Language as WebIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
+
+// Progress tracking component
+const ProgressTracker = ({ loading }) => {
+  const [progressData, setProgressData] = useState({});
+  const [connected, setConnected] = useState(false);
+  const ws = useRef(null);
+  
+  // Connect to WebSocket for progress updates
+  useEffect(() => {
+    const connectWebSocket = () => {
+      // Create WebSocket connection
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/progress`;
+      console.log(`Connecting to WebSocket at ${wsUrl}`);
+      ws.current = new WebSocket(wsUrl);
+      
+      ws.current.onopen = () => {
+        console.log('WebSocket connected successfully');
+        setConnected(true);
+      };
+      
+      ws.current.onmessage = (event) => {
+        try {
+          console.log('WebSocket message received:', event.data.substring(0, 200) + '...');
+          const data = JSON.parse(event.data);
+          console.log('Parsed data:', Object.keys(data));
+          setProgressData(data);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+      
+      ws.current.onclose = () => {
+        console.log('WebSocket disconnected');
+        setConnected(false);
+        // Only try to reconnect if we're still loading
+        if (loading) {
+          console.log('Reconnecting in 3 seconds...');
+          setTimeout(connectWebSocket, 3000);
+        }
+      };
+      
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        ws.current.close();
+      };
+    };
+    
+    // Connect initially
+    connectWebSocket();
+    
+    // Initial fetch of progress data
+    axios.get('/progress')
+      .then(response => {
+        setProgressData(response.data);
+      })
+      .catch(error => {
+        console.error('Error fetching progress:', error);
+      });
+    
+    // Cleanup function
+    return () => {
+      if (ws.current) {
+        console.log('Closing WebSocket connection on unmount');
+        ws.current.close();
+        ws.current = null;
+      }
+    };
+  }, [loading]);
+  
+  // Refresh progress data
+  const refreshProgress = () => {
+    axios.get('/progress')
+      .then(response => {
+        setProgressData(response.data);
+      })
+      .catch(error => {
+        console.error('Error fetching progress:', error);
+      });
+  };
+  
+  // Get task icon based on type
+  const getTaskIcon = (type) => {
+    switch(type) {
+      case 'loading': return '📚';
+      case 'chunking': return '✂️';
+      case 'embedding': return '🔢';
+      case 'storing': return '💾';
+      case 'complete': return '🎉';
+      default: return 'ℹ️';
+    }
+  };
+  
+  // Show if we're loading or have progress data
+  if (!loading && Object.keys(progressData).length === 0) {
+    return null;
+  }
+  
+  return (
+    <Card sx={{ mt: 3, mb: 3 }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            Processing Status
+            {connected ? 
+              <Chip size="small" label="Live" color="success" sx={{ ml: 1 }} /> : 
+              <Chip size="small" label="Disconnected" color="error" sx={{ ml: 1 }} />
+            }
+          </Typography>
+          <IconButton onClick={refreshProgress} size="small">
+            <RefreshIcon />
+          </IconButton>
+        </Box>
+        
+        {/* Group tasks by type for better organization */}
+        {Object.entries(progressData)
+          .sort((a, b) => {
+            // Sort by task type to group similar tasks
+            const typeOrder = {
+              'initializing': 1,
+              'loading': 2, 
+              'chunking': 3, 
+              'embedding': 4, 
+              'storing': 5,
+              'complete': 6,
+              'error': 7
+            };
+            return (typeOrder[a[1].type] || 99) - (typeOrder[b[1].type] || 99);
+          })
+          .map(([taskId, task]) => (
+          <Box key={taskId} sx={{ mb: 2, p: 1, borderRadius: 2, bgcolor: task.type === 'error' ? 'error.50' : 'background.paper' }}>
+            <Typography variant="subtitle1" fontWeight="bold">
+              {getTaskIcon(task.type)} {task.type.charAt(0).toUpperCase() + task.type.slice(1)} 
+              {task.timestamp && 
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  {new Date(task.timestamp * 1000).toLocaleTimeString()}
+                </Typography>
+              }
+            </Typography>
+            <Typography 
+              variant="body2" 
+              fontFamily="monospace"
+              whiteSpace="pre-wrap" 
+              color={task.type === 'error' ? 'error.main' : 'text.secondary'} 
+              sx={{ mb: 1 }}
+            >
+              {task.message}
+            </Typography>
+            {task.percentage > 0 && (
+              <LinearProgress 
+                variant="determinate" 
+                value={Math.min(100, task.percentage)}
+                color={task.type === 'error' ? 'error' : 'primary'}
+                sx={{ height: 8, borderRadius: 4 }}
+              />
+            )}
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
+  );
+};
 
 const LoadDataPage = () => {
   // State for file tab
@@ -187,6 +354,9 @@ const LoadDataPage = () => {
       <Typography variant="h4" gutterBottom>
         Load Data
       </Typography>
+      
+      {/* Progress Tracker */}
+      <ProgressTracker loading={loading} />
       
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
