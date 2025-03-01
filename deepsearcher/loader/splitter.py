@@ -45,24 +45,40 @@ def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chun
     all_chunks = []
     
     # Process documents in batches to provide progress updates
-    batch_size = max(1, len(documents) // 10)  # Report progress ~10 times
+    total_docs = len(documents)
     total_chunks = 0
     
-    for i, doc in enumerate(tqdm(documents, desc="Splitting documents")):
+    # Initialize progress
+    try:
+        log.inline_progress(f"✂️ Splitting: 0/{total_docs} documents (0%)")
+    except:
+        pass
+    
+    for i, doc in enumerate(documents):
         split_docs = text_splitter.split_documents([doc])
         split_chunks = _sentence_window_split(split_docs, doc, offset=300)
         all_chunks.extend(split_chunks)
         
-        # Log progress periodically or for the last document
-        if (i + 1) % batch_size == 0 or i == len(documents) - 1:
-            new_chunks = len(all_chunks) - total_chunks
-            total_chunks = len(all_chunks)
-            progress_pct = ((i + 1) / len(documents)) * 100
+        # Update progress for every document
+        new_chunks = len(all_chunks) - total_chunks
+        total_chunks = len(all_chunks)
+        progress_pct = ((i + 1) / total_docs) * 100
+        
+        # Only log if log module is imported and available
+        try:
+            # Update progress inline for every document
+            log.inline_progress(f"✂️ Splitting: {i+1}/{total_docs} documents ({progress_pct:.1f}%) - {total_chunks} total chunks")
             
-            # Only log if log module is imported and available
-            try:
-                log.color_print(f"📄 Processed {i+1}/{len(documents)} documents ({progress_pct:.1f}%), generated {new_chunks} new chunks (total: {total_chunks})")
-            except:
-                pass  # Skip logging if log module not available
+            # Print detailed updates periodically
+            if (i + 1) % max(1, total_docs // 10) == 0 or i == total_docs - 1:
+                log.color_print(f"   ↳ +{new_chunks} chunks from document {i+1}/{total_docs}", same_line=False)
+        except:
+            pass  # Skip logging if log module not available
+            
+    # Finish with a newline
+    try:
+        print()
+    except:
+        pass
                 
     return all_chunks

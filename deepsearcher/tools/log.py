@@ -83,5 +83,31 @@ def critical(message):
     if dev_mode:
         dev_logger.critical(message)
 
-def color_print(message, **kwargs):
-    progress_logger.info(message)
+def color_print(message, same_line=False, **kwargs):
+    """Print a colored message, optionally on the same line
+    
+    Args:
+        message: The message to print
+        same_line: If True, print on the same line, otherwise print a new line
+    """
+    if same_line:
+        inline_progress(message, same_line=True)
+    else:
+        progress_logger.info(message)
+    
+def inline_progress(message, same_line=True):
+    """Print progress updates that overwrite the previous line
+    
+    Args:
+        message: The progress message to display
+        same_line: Whether to overwrite the previous line (True) or print a new line (False)
+    """
+    if same_line:
+        # Use carriage return to update progress on the same line
+        print(f"\r{message}", end="", flush=True)
+    else:
+        # End the current line and start a new one
+        print(f"\r{message}")
+        
+# Dictionary to track current progress by task id
+_current_progress = {}

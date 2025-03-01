@@ -4,6 +4,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Union, Tuple
 
 from tqdm import tqdm
+import sys
 
 from deepsearcher.loader.splitter import split_docs_to_chunks
 from deepsearcher.tools import log
@@ -124,7 +125,13 @@ def load_from_local_files(
         futures = {executor.submit(file_loader.load_file, path): path 
                   for path in all_file_paths}
         
-        for i, future in enumerate(tqdm(as_completed(futures), total=len(futures), desc="Loading files")):
+        total_files = len(futures)
+        completed = 0
+        
+        # Initial progress message
+        log.inline_progress(f"📚 Loading files: 0/{total_files} (0%)")
+        
+        for i, future in enumerate(as_completed(futures)):
             try:
                 docs = future.result()
                 path = futures[future]
@@ -132,16 +139,40 @@ def load_from_local_files(
                     doc_count = len(docs)
                     all_docs.extend(docs)
                     success_count += 1
-                    if i % 5 == 0 or i == len(all_file_paths) - 1:  # Log every 5 files or the last file
-                        log.color_print(f"✅ Loaded file {i+1}/{len(all_file_paths)}: {path} ({doc_count} documents)")
+                    completed += 1
+                    
+                    # Update progress inline
+                    progress_pct = (completed / total_files) * 100
+                    log.inline_progress(f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)")
+                    
+                    # Additional details for periodic detailed updates
+                    if i % 10 == 0 or i == total_files - 1:  # Less frequent detailed updates
+                        log.color_print(f"✅ Loaded file: {path} ({doc_count} documents)", same_line=False)
                 else:
                     path = futures[future]
                     error_count += 1
-                    log.color_print(f"⚠️ Warning: No documents returned for {path}")
+                    completed += 1
+                    
+                    # Update progress inline
+                    progress_pct = (completed / total_files) * 100
+                    log.inline_progress(f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)")
+                    
+                    # Print error on new line
+                    log.color_print(f"⚠️ Warning: No documents returned for {path}", same_line=False)
             except Exception as e:
                 path = futures[future]
                 error_count += 1
-                log.color_print(f"❌ Error loading {path}: {e}")
+                completed += 1
+                
+                # Update progress inline
+                progress_pct = (completed / total_files) * 100
+                log.inline_progress(f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)")
+                
+                # Print error on new line
+                log.color_print(f"❌ Error loading {path}: {e}", same_line=False)
+        
+        # End progress with a newline
+        print()
     
     # Handle case where no documents were loaded
     if not all_docs:
