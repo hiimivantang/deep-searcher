@@ -199,3 +199,20 @@ pyrightconfig.json
 *.db
 config.yaml
 deep-searcher-report.md
+
+# Frontend
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+frontend/coverage/
+frontend/build/
+static/
+
+# Config backups
+*.yaml.backup
+*.yaml.bak
+
+# Frontend
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
