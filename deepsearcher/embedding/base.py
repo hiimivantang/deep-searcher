@@ -1,8 +1,14 @@
 from typing import List
+import time
 
 from tqdm import tqdm
 
 from deepsearcher.loader.splitter import Chunk
+try:
+    from deepsearcher.tools import log
+    log_available = True
+except ImportError:
+    log_available = False
 
 
 class BaseEmbedding:
@@ -16,11 +22,49 @@ class BaseEmbedding:
         texts = [chunk.text for chunk in chunks]
         batch_texts = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
         embeddings = []
-        for batch_text in tqdm(batch_texts, desc="Embedding chunks"):
+        
+        total_chunks = len(chunks)
+        processed_chunks = 0
+        start_time = time.time()
+        
+        # Log start of embedding process
+        if log_available:
+            model_name = self.__class__.__name__
+            log.color_print(f"🔢 Starting embedding generation for {total_chunks} chunks using {model_name}")
+            log.color_print(f"   ↳ Processing in {len(batch_texts)} batches of up to {batch_size} chunks each")
+        
+        for i, batch_text in enumerate(tqdm(batch_texts, desc="Embedding chunks")):
+            batch_start = time.time()
             batch_embeddings = self.embed_documents(batch_text)
+            batch_time = time.time() - batch_start
+            
             embeddings.extend(batch_embeddings)
+            processed_chunks += len(batch_text)
+            
+            # Log progress periodically
+            if log_available and (i % max(1, len(batch_texts)//5) == 0 or i == len(batch_texts) - 1):
+                progress_pct = (processed_chunks / total_chunks) * 100
+                elapsed = time.time() - start_time
+                chunks_per_sec = processed_chunks / max(1, elapsed)
+                estimated_total = (total_chunks / max(1, processed_chunks)) * elapsed
+                remaining = max(0, estimated_total - elapsed)
+                
+                log.color_print(f"⏳ Embedded {processed_chunks}/{total_chunks} chunks ({progress_pct:.1f}%)")
+                log.color_print(f"   ↳ Speed: {chunks_per_sec:.1f} chunks/sec, Est. time remaining: {remaining/60:.1f} min")
+                
+                if i < len(batch_texts) - 1:
+                    # Don't log this for the final batch
+                    log.color_print(f"   ↳ Last batch: {len(batch_text)} chunks in {batch_time:.2f}s ({len(batch_text)/batch_time:.1f} chunks/sec)")
+        
+        # Assign embeddings to chunks
         for chunk, embedding in zip(chunks, embeddings):
             chunk.embedding = embedding
+            
+        # Log completion
+        if log_available:
+            total_time = time.time() - start_time
+            log.color_print(f"✅ Embedding complete: {total_chunks} chunks embedded in {total_time/60:.1f} minutes")
+            
         return chunks
 
     @property
