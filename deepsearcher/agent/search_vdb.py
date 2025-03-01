@@ -12,7 +12,7 @@ RERANK_PROMPT = """Based on the query questions and the retrieved chunk, to dete
 Query Questions: {query}
 Retrieved Chunk: {retrieved_chunk}
 
-Is the chunk helpful in answering the any of the questions?
+Is the chunk helpful in answering any of the questions?
 """
 
 
@@ -36,12 +36,23 @@ async def search_chunks_from_vectordb(query: str, sub_queries: List[str]):
     chat_response = llm.chat(
         messages=[{"role": "user", "content": vector_db_search_prompt}]
     )
-    llm_collections = llm.literal_eval(chat_response.content)
+    # Handle the response properly - AWS Bedrock expects a string, not a JSONArray
+    try:
+        # First try to parse as a Python list directly
+        llm_collections = llm.literal_eval(chat_response.content)
+        if not isinstance(llm_collections, list):
+            # If not a list, convert to a list with a single item
+            llm_collections = [chat_response.content.strip()]
+    except:
+        # If parsing fails, use the raw string as a single collection
+        llm_collections = [chat_response.content.strip()]
+        
     collection_2_query = {}
     consume_tokens += chat_response.total_tokens
 
     for collection in llm_collections:
-        collection_2_query[collection] = query
+        if isinstance(collection, str):  # Ensure collection is a string
+            collection_2_query[collection] = query
 
     for collection_info in collection_infos:
         # If a collection description is not provided, use the query as the search query
@@ -70,7 +81,7 @@ async def search_chunks_from_vectordb(query: str, sub_queries: List[str]):
                     {
                         "role": "user",
                         "content": RERANK_PROMPT.format(
-                            query=[col_query] + sub_queries,
+                            query=", ".join([col_query] + sub_queries),
                             retrieved_chunk=retrieved_result.text,
                         ),
                     }
