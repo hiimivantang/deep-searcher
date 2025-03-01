@@ -11,3 +11,6 @@ fastapi
 uvicorn
 pydantic-settings
 boto3
+python-multipart
+jinja2
+aiofiles
