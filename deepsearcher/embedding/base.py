@@ -23,13 +23,13 @@ class BaseEmbedding:
         # Adjust batch size based on environment
         in_docker = os.path.exists('/.dockerenv')
         
-        # In Docker, use a smaller default batch size (32) for stability
-        # Outside of Docker, use a larger batch size (64) for performance
+        # In Docker, use a moderate batch size (64) to balance performance and stability
+        # We've found 64 to be a good compromise between performance and reliability
         if in_docker:
-            default_batch_size = 32
-            if batch_size > default_batch_size:
+            default_batch_size = 64
+            if batch_size != default_batch_size:
                 if log_available:
-                    log.color_print(f"🐳 Docker environment detected, using conservative batch size of {default_batch_size}",
+                    log.color_print(f"🐳 Docker environment detected, using balanced batch size of {default_batch_size}",
                                    task_id=task_id, progress_type="embedding")
                 batch_size = default_batch_size
             

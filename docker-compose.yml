@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   deepsearcher:
     build:
@@ -10,9 +8,14 @@ services:
     volumes:
       - ./config.yaml:/config/config.yaml
       - ./documents:/data/documents
+    environment:
+      - MAX_WORKERS=2  # Can be overridden at runtime
+    #deploy:
+    #  resources:
+    #    limits:
+    #      cpus: '2'  # Limit CPU usage
+    #      memory: 4G  # Limit memory usage
+    #    reservations:
+    #      cpus: '1'
+    #      memory: 2G
     restart: unless-stopped
-    # Add memory limits to prevent segmentation faults
-    deploy:
-      resources:
-        limits:
-          memory: 4G

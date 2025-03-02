@@ -71,7 +71,7 @@ class Milvus(BaseVectorDB):
         self,
         collection: Optional[str],
         chunks: List[Chunk],
-        batch_size: int = 256,
+        batch_size: int = 64,
         *args,
         **kwargs,
     ):

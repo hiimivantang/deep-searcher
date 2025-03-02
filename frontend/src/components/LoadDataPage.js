@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -16,176 +16,27 @@ import {
   LinearProgress,
   Card,
   CardContent,
-  IconButton,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
   Language as WebIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
-  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 
-// Progress tracking component
-const ProgressTracker = ({ loading }) => {
-  const [progressData, setProgressData] = useState({});
-  const [connected, setConnected] = useState(false);
-  const ws = useRef(null);
-  
-  // Connect to WebSocket for progress updates
-  useEffect(() => {
-    const connectWebSocket = () => {
-      // Create WebSocket connection
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws/progress`;
-      console.log(`Connecting to WebSocket at ${wsUrl}`);
-      ws.current = new WebSocket(wsUrl);
-      
-      ws.current.onopen = () => {
-        console.log('WebSocket connected successfully');
-        setConnected(true);
-      };
-      
-      ws.current.onmessage = (event) => {
-        try {
-          console.log('WebSocket message received:', event.data.substring(0, 200) + '...');
-          const data = JSON.parse(event.data);
-          console.log('Parsed data:', Object.keys(data));
-          setProgressData(data);
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-      
-      ws.current.onclose = () => {
-        console.log('WebSocket disconnected');
-        setConnected(false);
-        // Only try to reconnect if we're still loading
-        if (loading) {
-          console.log('Reconnecting in 3 seconds...');
-          setTimeout(connectWebSocket, 3000);
-        }
-      };
-      
-      ws.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        ws.current.close();
-      };
-    };
-    
-    // Connect initially
-    connectWebSocket();
-    
-    // Initial fetch of progress data
-    axios.get('/progress')
-      .then(response => {
-        setProgressData(response.data);
-      })
-      .catch(error => {
-        console.error('Error fetching progress:', error);
-      });
-    
-    // Cleanup function
-    return () => {
-      if (ws.current) {
-        console.log('Closing WebSocket connection on unmount');
-        ws.current.close();
-        ws.current = null;
-      }
-    };
-  }, [loading]);
-  
-  // Refresh progress data
-  const refreshProgress = () => {
-    axios.get('/progress')
-      .then(response => {
-        setProgressData(response.data);
-      })
-      .catch(error => {
-        console.error('Error fetching progress:', error);
-      });
-  };
-  
-  // Get task icon based on type
-  const getTaskIcon = (type) => {
-    switch(type) {
-      case 'loading': return '📚';
-      case 'chunking': return '✂️';
-      case 'embedding': return '🔢';
-      case 'storing': return '💾';
-      case 'complete': return '🎉';
-      default: return 'ℹ️';
-    }
-  };
-  
-  // Show if we're loading or have progress data
-  if (!loading && Object.keys(progressData).length === 0) {
-    return null;
-  }
+// Simple loading indicator - completely static, no WebSocket or async code
+const LoadingIndicator = ({ loading }) => {
+  if (!loading) return null;
   
   return (
-    <Card sx={{ mt: 3, mb: 3 }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">
-            Processing Status
-            {connected ? 
-              <Chip size="small" label="Live" color="success" sx={{ ml: 1 }} /> : 
-              <Chip size="small" label="Disconnected" color="error" sx={{ ml: 1 }} />
-            }
-          </Typography>
-          <IconButton onClick={refreshProgress} size="small">
-            <RefreshIcon />
-          </IconButton>
-        </Box>
-        
-        {/* Group tasks by type for better organization */}
-        {Object.entries(progressData)
-          .sort((a, b) => {
-            // Sort by task type to group similar tasks
-            const typeOrder = {
-              'initializing': 1,
-              'loading': 2, 
-              'chunking': 3, 
-              'embedding': 4, 
-              'storing': 5,
-              'complete': 6,
-              'error': 7
-            };
-            return (typeOrder[a[1].type] || 99) - (typeOrder[b[1].type] || 99);
-          })
-          .map(([taskId, task]) => (
-          <Box key={taskId} sx={{ mb: 2, p: 1, borderRadius: 2, bgcolor: task.type === 'error' ? 'error.50' : 'background.paper' }}>
-            <Typography variant="subtitle1" fontWeight="bold">
-              {getTaskIcon(task.type)} {task.type.charAt(0).toUpperCase() + task.type.slice(1)} 
-              {task.timestamp && 
-                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  {new Date(task.timestamp * 1000).toLocaleTimeString()}
-                </Typography>
-              }
-            </Typography>
-            <Typography 
-              variant="body2" 
-              fontFamily="monospace"
-              whiteSpace="pre-wrap" 
-              color={task.type === 'error' ? 'error.main' : 'text.secondary'} 
-              sx={{ mb: 1 }}
-            >
-              {task.message}
-            </Typography>
-            {task.percentage > 0 && (
-              <LinearProgress 
-                variant="determinate" 
-                value={Math.min(100, task.percentage)}
-                color={task.type === 'error' ? 'error' : 'primary'}
-                sx={{ height: 8, borderRadius: 4 }}
-              />
-            )}
-          </Box>
-        ))}
-      </CardContent>
-    </Card>
+    <Box sx={{ my: 3, p: 3, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <CircularProgress size={20} sx={{ mr: 2 }} />
+        <Typography>Processing your request. This may take a few minutes.</Typography>
+      </Box>
+      <LinearProgress sx={{ mt: 2 }} />
+    </Box>
   );
 };
 
@@ -206,8 +57,99 @@ const LoadDataPage = () => {
   const [alert, setAlert] = useState({
     open: false,
     message: '',
-    severity: 'success'
+    severity: 'info',
+    progress: 0
   });
+
+  // Poll for progress updates
+  // Track processed files to avoid duplicate notifications
+  const [processedFiles, setProcessedFiles] = useState(new Set());
+  
+  // Poll for progress updates and show notifications for completed documents
+  useEffect(() => {
+    let pollInterval;
+    
+    if (loading) {
+      // Set up polling interval to check for progress
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await axios.get('/progress');
+          const progressData = response.data;
+          
+          // Extract all tasks
+          const tasks = Object.values(progressData);
+          
+          // Check for task completion
+          const completeTask = tasks.find(task => task && task.type === 'complete');
+          
+          // Find tasks with loaded files
+          for (const task of tasks) {
+            if (task && Array.isArray(task.loaded_files) && task.loaded_files.length > 0) {
+              // Show notifications for newly processed files
+              task.loaded_files.forEach(file => {
+                const fileId = `${file.path}-${file.count}`;
+                if (!processedFiles.has(fileId)) {
+                  setProcessedFiles(prev => new Set([...prev, fileId]));
+                  
+                  // Show a notification for this file
+                  setAlert({
+                    open: true,
+                    message: `Processed: ${file.path} (${file.count} document${file.count !== 1 ? 's' : ''})`,
+                    severity: 'info',
+                    progress: task.percentage || 0
+                  });
+                  
+                  // Auto-close after 3 seconds to prevent notification buildup
+                  setTimeout(() => {
+                    setAlert(prev => {
+                      if (prev.message.includes(file.path)) {
+                        return {...prev, open: false};
+                      }
+                      return prev;
+                    });
+                  }, 3000);
+                }
+              });
+            }
+          }
+          
+          // If complete task is found, finish the process
+          if (completeTask) {
+            // If we found a complete task, finish loading
+            setLoading(false);
+            setAlert({
+              open: true,
+              message: 'All documents processed successfully',
+              severity: 'success',
+              progress: 100
+            });
+            
+            // Reset form fields after completion
+            if (tabValue === 0) {
+              setFilePaths(['']);
+              setFileCollectionName('');
+              setFileCollectionDescription('');
+            }
+            
+            // Clear the polling interval
+            clearInterval(pollInterval);
+            
+            // Reset processed files tracking for next upload
+            setProcessedFiles(new Set());
+          }
+        } catch (error) {
+          console.error('Error checking progress:', error);
+        }
+      }, 1500); // Check more frequently (every 1.5 seconds)
+    }
+    
+    return () => {
+      // Clean up interval on unmount or when loading state changes
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [loading, tabValue, processedFiles]);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -262,39 +204,37 @@ const LoadDataPage = () => {
         open: true,
         message: 'Please enter at least one valid file path',
         severity: 'error',
+        progress: 0
       });
       return;
     }
 
     setLoading(true);
+    setAlert({
+      open: true,
+      message: 'Starting file upload...',
+      severity: 'info',
+      progress: 0
+    });
     
     try {
-      const response = await axios.post('/load-files', {
+      await axios.post('/load-files', {
         paths: validFilePaths.length === 1 ? validFilePaths[0] : validFilePaths,
         collection_name: fileCollectionName || undefined,
         collection_description: fileCollectionDescription || undefined,
       });
       
-      setAlert({
-        open: true,
-        message: 'Files loaded successfully!',
-        severity: 'success',
-      });
-      
-      // Reset the form after successful submission
-      setFilePaths(['']);
-      setFileCollectionName('');
-      setFileCollectionDescription('');
+      // Don't reset form yet - wait for completion in progress polling
       
     } catch (error) {
       console.error('Error loading files:', error);
+      setLoading(false);
       setAlert({
         open: true,
         message: error.response?.data?.detail || 'Failed to load files. Please try again.',
         severity: 'error',
+        progress: 0
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -346,7 +286,10 @@ const LoadDataPage = () => {
   };
 
   const handleCloseAlert = () => {
-    setAlert({...alert, open: false});
+    // Only close alert if not loading
+    if (!loading) {
+      setAlert({...alert, open: false});
+    }
   };
 
   return (
@@ -355,8 +298,7 @@ const LoadDataPage = () => {
         Load Data
       </Typography>
       
-      {/* Progress Tracker */}
-      <ProgressTracker loading={loading} />
+      <LoadingIndicator loading={loading} />
       
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -533,16 +475,49 @@ const LoadDataPage = () => {
       
       <Snackbar 
         open={alert.open} 
-        autoHideDuration={6000} 
+        autoHideDuration={loading ? null : 6000}  // Don't auto-hide final success message
         onClose={handleCloseAlert}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        key={alert.message} // Key helps React identify which snackbar to update
       >
         <Alert 
-          onClose={handleCloseAlert} 
-          severity={alert.severity} 
-          sx={{ width: '100%' }}
+          onClose={handleCloseAlert}
+          severity={alert.severity}
+          sx={{ width: '100%', maxWidth: '500px' }} // Set a max width for better readability
         >
-          {alert.message}
+          <Box sx={{ width: '100%' }}>
+            <Typography 
+              variant="body2"
+              sx={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                // Only if the message is a file path, otherwise let it wrap
+                whiteSpace: alert.message.includes('Processed:') ? 'nowrap' : 'normal',
+                maxWidth: '460px'
+              }}
+            >
+              {alert.message}
+            </Typography>
+            {alert.progress > 0 && (
+              <Box sx={{ width: '100%', mt: 1 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={Math.min(100, alert.progress)} 
+                  sx={{ 
+                    height: 4, 
+                    borderRadius: 2,
+                    backgroundColor: '#e0e0e0',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 2,
+                    }
+                  }}
+                />
+                <Typography variant="caption" sx={{ mt: 0.5, display: 'block', textAlign: 'right' }}>
+                  {alert.progress.toFixed(1)}% Complete
+                </Typography>
+              </Box>
+            )}
+          </Box>
         </Alert>
       </Snackbar>
     </div>

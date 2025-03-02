@@ -2,16 +2,21 @@ FROM node:18 AS frontend-builder
 
 WORKDIR /app
 
-# Copy frontend code and install dependencies
+# Copy only needed frontend files and install dependencies
 COPY ./frontend/package*.json ./frontend/
 RUN cd frontend && npm install
 
-# Copy and build the frontend
-COPY ./frontend ./frontend/
+# Copy only the source files needed for build (exclude node_modules)
+COPY ./frontend/public ./frontend/public/
+COPY ./frontend/src ./frontend/src/
+COPY ./frontend/*.js ./frontend/
+COPY ./frontend/*.json ./frontend/
+
+# Build the frontend
 RUN cd frontend && npm run build
 
 # Python base image
-FROM python:3.12-bullseye
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -19,6 +24,7 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     git \
+    build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,16 +32,26 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy application code (exclude unnecessary directories to save space)
+COPY deepsearcher ./deepsearcher/
+COPY examples ./examples/
+COPY documents ./documents/
+COPY *.py ./
+COPY *.sh ./
+COPY *.txt ./
+COPY *.yaml ./
+COPY *.md ./
 
 # Copy the built frontend from the frontend-builder stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# Static files are already configured in main.py
-
-# Set environment variable to read config from mounted volume
+# Set environment variables
 ENV CONFIG_PATH=/config/config.yaml
+ENV PYTHONPATH=/app
+ENV MULTIPROCESSING_FORK_ENABLE=1
+
+# Set default number of workers for multiprocessing
+ENV MAX_WORKERS=2
 
 # Expose ports for the application
 EXPOSE 8000
