@@ -41,7 +41,19 @@ def _sentence_window_split(
 
 
 
-def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chunk_overlap=100, task_id="default") -> List[Chunk]:
+def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chunk_overlap=100, task_id="default", 
+                   base_progress=0, target_progress=100) -> List[Chunk]:
+    """
+    Split documents into chunks with progress tracking.
+    
+    Args:
+        documents: List of documents to split
+        chunk_size: Size of text chunks
+        chunk_overlap: Overlap between chunks
+        task_id: Task ID for progress tracking
+        base_progress: Starting progress percentage (0-100)
+        target_progress: Target progress percentage when done (0-100)
+    """
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     all_chunks = []
     
@@ -51,6 +63,11 @@ def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chun
     
     # Initialize progress
     try:
+        # Set chunking progress at the base level
+        log.update_stage_progress(task_id, "Text Chunking", "chunking", base_progress, 
+                                f"✂️ Starting to split {total_docs} documents...")
+        
+        # Also set inline progress for terminal
         log.inline_progress(f"✂️ Splitting: 0/{total_docs} documents (0%)", task_id=task_id, progress_type="chunking")
     except:
         pass
@@ -67,7 +84,14 @@ def split_docs_to_chunks(documents: List[Document], chunk_size: int = 1500, chun
         
         # Only log if log module is imported and available
         try:
-            # Update progress inline for every document
+            # Calculate scaled progress between base_progress and target_progress
+            scaled_progress = base_progress + (progress_pct * (target_progress - base_progress) / 100.0)
+            
+            # Update the frontend progress indicator with scaled progress
+            log.update_stage_progress(task_id, "Text Chunking", "chunking", scaled_progress,
+                                    f"✂️ Splitting: {i+1}/{total_docs} documents - {total_chunks} chunks created")
+            
+            # Update progress inline for terminal display
             log.inline_progress(
                 f"✂️ Splitting: {i+1}/{total_docs} documents ({progress_pct:.1f}%) - {total_chunks} total chunks",
                 task_id=task_id,

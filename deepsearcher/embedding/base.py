@@ -103,6 +103,12 @@ class BaseEmbedding:
         Returns:
             List of chunks with embeddings
         """
+        # Import the progress update helpers
+        try:
+            from deepsearcher.offline_loading import update_embedding_progress
+            progress_helpers_available = True
+        except ImportError:
+            progress_helpers_available = False
         # Use optimal settings if not specified
         if batch_size is None:
             batch_size = self.get_optimal_batch_size()
@@ -129,6 +135,12 @@ class BaseEmbedding:
                            task_id=f"{task_id}_detail", progress_type="embedding")
             log.color_print(f"   ↳ Batch size: {batch_size} chunks per batch", 
                            task_id=f"{task_id}_batch_size", progress_type="embedding")
+            
+            # Update progress indicators if helpers are available
+            if progress_helpers_available:
+                # Extract parent task ID if this is a subtask
+                main_task_id = task_id.split('_')[0] if '_' in task_id else task_id
+                update_embedding_progress(main_task_id, 0, 1, total_chunks, "processing")
         
         # Prepare result container
         all_embeddings = []
@@ -227,6 +239,12 @@ class BaseEmbedding:
                 task_id=task_id,
                 progress_type="embedding"
             )
+            
+            # Update progress indicators if helpers are available
+            if progress_helpers_available:
+                # Extract parent task ID if this is a subtask
+                main_task_id = task_id.split('_')[0] if '_' in task_id else task_id
+                update_embedding_progress(main_task_id, 1, 1, total_chunks, "complete")
         
         return chunks
 
@@ -240,6 +258,8 @@ class BaseEmbedding:
             collection_name: Collection name to store embeddings in
             task_id: Task ID for logging
         """
+        # Import needed only in the worker to avoid circular imports
+        from deepsearcher.offline_loading import update_embedding_progress, update_storing_progress
         if cls.embedding_worker_running:
             if log_available:
                 log.color_print("⚠️ Embedding worker already running", task_id=task_id, progress_type="warning")
@@ -263,10 +283,19 @@ class BaseEmbedding:
                     if batch_info is None:
                         break
                     
-                    embedding_model, batch_chunks, batch_task_id = batch_info
+                    embedding_model, batch_chunks, batch_task_id, batch_idx, batch_count = batch_info
+                    
+                    # Extract main task ID from batch task ID
+                    main_task_id = batch_task_id.split('_')[0] if '_' in batch_task_id else batch_task_id
+                    
+                    # Get number of chunks
+                    chunk_count = len(batch_chunks)
                     
                     if log_available:
-                        log.color_print(f"🔢 Worker processing {len(batch_chunks)} chunks", 
+                        # Update embedding progress for the parent task - starting
+                        update_embedding_progress(main_task_id, batch_idx, batch_count, chunk_count, "start")
+                    
+                        log.color_print(f"🔢 Worker processing {chunk_count} chunks (batch {batch_idx+1}/{batch_count})", 
                                       task_id=f"{task_id}_worker", progress_type="embedding")
                     
                     # Embed chunks
@@ -275,14 +304,22 @@ class BaseEmbedding:
                         task_id=f"{batch_task_id}_worker"
                     )
                     
-                    # Insert into vector database
                     if log_available:
-                        log.color_print(f"💾 Worker inserting {len(embedded_chunks)} chunks into '{collection_name}'", 
+                        # Update embedding progress - completed
+                        update_embedding_progress(main_task_id, batch_idx, batch_count, chunk_count, "complete")
+                    
+                        # Update storing progress - starting
+                        update_storing_progress(main_task_id, batch_idx, batch_count, chunk_count, "start")
+                        
+                        log.color_print(f"💾 Worker inserting {chunk_count} chunks into '{collection_name}'", 
                                       task_id=f"{task_id}_worker", progress_type="storing")
                     
                     vector_db.insert_data(collection=collection_name, chunks=embedded_chunks)
                     
                     if log_available:
+                        # Update storing progress - completed
+                        update_storing_progress(main_task_id, batch_idx, batch_count, chunk_count, "complete")
+                        
                         log.color_print(f"✅ Worker completed batch of {len(embedded_chunks)} chunks", 
                                       task_id=f"{task_id}_worker", progress_type="complete")
                     
@@ -349,7 +386,7 @@ class BaseEmbedding:
             log.color_print("✅ Background embedding worker stopped", task_id=task_id, progress_type="embedding")
     
     @classmethod
-    def queue_chunks_for_embedding(cls, embedding_model, chunks, task_id="default"):
+    def queue_chunks_for_embedding(cls, embedding_model, chunks, task_id="default", batch_idx=0, batch_count=1):
         """
         Queue chunks for background embedding processing.
         
@@ -357,6 +394,8 @@ class BaseEmbedding:
             embedding_model: The embedding model to use
             chunks: Chunks to embed
             task_id: Task ID for logging
+            batch_idx: Current batch index (for progress tracking)
+            batch_count: Total number of batches (for progress tracking)
         """
         if not cls.embedding_worker_running:
             if log_available:
@@ -365,10 +404,23 @@ class BaseEmbedding:
             return False
         
         if log_available:
-            log.color_print(f"📤 Queuing {len(chunks)} chunks for background embedding", 
+            log.color_print(f"📤 Queuing {len(chunks)} chunks for background embedding (batch {batch_idx+1}/{batch_count})", 
                           task_id=task_id, progress_type="embedding")
         
-        cls.embedding_queue.put((embedding_model, chunks, task_id))
+        # Update embedding progress in the UI before queuing
+        if log_available:
+            # Calculate progress based on batch position
+            progress = (batch_idx / max(1, batch_count)) * 100
+            log.update_stage_progress(
+                task_id.split('_')[0] if '_' in task_id else task_id,  # Extract main task ID if needed
+                "Embedding Generation", 
+                "embedding", 
+                progress,
+                f"🔢 Embedding batch {batch_idx+1}/{batch_count} ({len(chunks)} chunks)"
+            )
+            
+        # Include batch information for progress tracking
+        cls.embedding_queue.put((embedding_model, chunks, task_id, batch_idx, batch_count))
         return True
 
     def embed_chunks(self, chunks: List[Chunk], batch_size=64, task_id="default") -> List[Chunk]:

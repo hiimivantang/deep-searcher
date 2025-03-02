@@ -19,23 +19,171 @@ import {
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
+  CloudUpload,
   Language as WebIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
+  ContentCut,
+  Memory,
+  Storage,
 } from '@mui/icons-material';
 import axios from 'axios';
 
-// Simple loading indicator - completely static, no WebSocket or async code
-const LoadingIndicator = ({ loading }) => {
+// Enable this for debugging progress issues
+const DEBUG_PROGRESS = true;
+
+// Enhanced loading indicator with dynamic progress updates
+const LoadingIndicator = ({ loading, progressData }) => {
   if (!loading) return null;
+  
+  // Find relevant tasks for each stage with improved matching logic
+  const findTaskByType = (type) => {
+    const allTasks = Object.entries(progressData || {});
+    
+    // Look for most recent update first
+    let mostRecent = null;
+    let mostRecentTime = 0;
+    
+    for (const [id, task] of allTasks) {
+      // If type matches what we're looking for
+      if (task && task.type === type) {
+        // If task has a timestamp and it's more recent
+        if (task.timestamp && task.timestamp > mostRecentTime) {
+          mostRecent = task;
+          mostRecentTime = task.timestamp;
+        }
+        // If no timestamp but we haven't found anything yet
+        else if (!mostRecent) {
+          mostRecent = task;
+        }
+      }
+    }
+    
+    // Return the most recent task of this type
+    if (mostRecent) {
+      if (DEBUG_PROGRESS) {
+        console.log(`Found ${type} task with ${mostRecent.percentage}% progress`);
+      }
+      return mostRecent;
+    }
+    
+    // Nothing found
+    return null;
+  };
+  
+  // Get tasks for each stage with improved lookup
+  const loadingTask = findTaskByType('loading');
+  const chunkingTask = findTaskByType('chunking');
+  const embeddingTask = findTaskByType('embedding');
+  const storingTask = findTaskByType('storing');
+  
+  // Calculate default values for missing stages based on completed stages
+  const getDefaultPercentage = (stageIndex) => {
+    const stages = [loadingTask, chunkingTask, embeddingTask, storingTask];
+    
+    // Debug the stage values
+    if (DEBUG_PROGRESS) {
+      console.log(`Stage ${stageIndex} check:`, stages[stageIndex]);
+    }
+    
+    // If this stage has explicit progress, use it
+    if (stages[stageIndex]?.percentage !== undefined) {
+      if (DEBUG_PROGRESS) {
+        console.log(`  Using explicit percentage: ${stages[stageIndex].percentage}%`);
+      }
+      return stages[stageIndex].percentage;
+    }
+    
+    // Find the last stage with progress
+    for (let i = stageIndex-1; i >= 0; i--) {
+      if (stages[i]?.percentage !== undefined && stages[i].percentage === 100) {
+        // Previous stage is complete, so we're starting
+        const result = stageIndex === i+1 ? 5 : 0; // 5% progress if we're the next stage
+        if (DEBUG_PROGRESS) {
+          console.log(`  Previous stage ${i} complete, returning ${result}%`);
+        }
+        return result;
+      }
+    }
+    
+    // If loading has started, we should show at least loading at 100%
+    if (stageIndex === 0) {
+      if (DEBUG_PROGRESS) {
+        console.log(`  First stage, defaulting to 100%`);
+      }
+      return 100;
+    }
+    
+    if (DEBUG_PROGRESS) {
+      console.log(`  No progress info, returning 0%`);
+    }
+    return 0;
+  };
+  
+  // Function to render stage progress
+  const renderStage = (title, task, icon, stageIndex) => {
+    // If task exists, it's active; otherwise check if previous stage is complete
+    const active = !!task || (stageIndex > 0 && getDefaultPercentage(stageIndex-1) === 100);
+    
+    // Use task percentage if available, otherwise use default based on progress
+    const percentage = task?.percentage !== undefined ? task.percentage : getDefaultPercentage(stageIndex);
+    
+    const message = task?.message || '';
+    
+    return (
+      <Box sx={{ mb: 2, opacity: active ? 1 : 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          {icon}
+          <Typography variant="subtitle2" sx={{ ml: 1, fontWeight: active ? 'bold' : 'normal' }}>
+            {title}
+          </Typography>
+          {active && (
+            <Typography variant="caption" sx={{ ml: 'auto', color: 'text.secondary' }}>
+              {percentage.toFixed(1)}%
+            </Typography>
+          )}
+        </Box>
+        <LinearProgress 
+          variant={active ? "determinate" : "indeterminate"} 
+          value={percentage}
+          sx={{ height: 6, borderRadius: 1 }}
+        />
+        {active && message && (
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {message}
+          </Typography>
+        )}
+      </Box>
+    );
+  };
+  
+  // Check if we have any task data at all
+  const hasAnyTask = loadingTask || chunkingTask || embeddingTask || storingTask;
   
   return (
     <Box sx={{ my: 3, p: 3, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <CircularProgress size={20} sx={{ mr: 2 }} />
-        <Typography>Processing your request. This may take a few minutes.</Typography>
+      <Typography variant="h6" gutterBottom>
+        Processing Progress
+      </Typography>
+      
+      {!hasAnyTask && (
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <CircularProgress size={20} sx={{ mr: 2 }} />
+          <Typography>Starting processing... Please wait.</Typography>
+        </Box>
+      )}
+      
+      <Box sx={{ mt: 3 }}>
+        {renderStage("File Loading", loadingTask, <CloudUpload fontSize="small" color={loadingTask ? "primary" : "disabled"} />, 0)}
+        {renderStage("Text Chunking", chunkingTask, <ContentCut fontSize="small" color={chunkingTask ? "primary" : "disabled"} />, 1)}
+        {renderStage("Embedding Generation", embeddingTask, <Memory fontSize="small" color={embeddingTask ? "primary" : "disabled"} />, 2)}
+        {renderStage("Database Storage", storingTask, <Storage fontSize="small" color={storingTask ? "primary" : "disabled"} />, 3)}
       </Box>
-      <LinearProgress sx={{ mt: 2 }} />
+      
+      <Typography variant="caption" sx={{ display: 'block', mt: 2, color: 'text.secondary' }}>
+        This process may take several minutes depending on the size of your files.
+        {!hasAnyTask && " If you don't see progress after 10-15 seconds, check Docker logs for possible issues."}
+      </Typography>
     </Box>
   );
 };
@@ -60,6 +208,9 @@ const LoadDataPage = () => {
     severity: 'info',
     progress: 0
   });
+  
+  // Progress state
+  const [progressData, setProgressData] = useState({});
 
   // Poll for progress updates
   // Track processed files to avoid duplicate notifications
@@ -75,6 +226,43 @@ const LoadDataPage = () => {
         try {
           const response = await axios.get('/progress');
           const progressData = response.data;
+          
+          // Detailed debugging of progress data (controlled by debug flag)
+          if (DEBUG_PROGRESS) {
+            console.log("Progress data received:", progressData);
+            
+            // Extract task-specific progress for debugging
+            const loadingTask = Object.values(progressData || {}).find(task => task?.type === 'loading');
+            const chunkingTask = Object.values(progressData || {}).find(task => task?.type === 'chunking');
+            const embeddingTask = Object.values(progressData || {}).find(task => task?.type === 'embedding');
+            const storingTask = Object.values(progressData || {}).find(task => task?.type === 'storing');
+            
+            // Log specifically embedding and storing progress
+            if (embeddingTask) {
+              console.log(`EMBEDDING PROGRESS: ${embeddingTask.percentage?.toFixed(1)}% - ${embeddingTask.message}`);
+            }
+            
+            if (storingTask) {
+              console.log(`STORING PROGRESS: ${storingTask.percentage?.toFixed(1)}% - ${storingTask.message}`);
+            }
+          }
+          
+          // Update the progress data state
+          setProgressData(progressData);
+          
+          // Add debug info about missing tasks if needed
+          if (DEBUG_PROGRESS) {
+            const hasEmbedding = Object.values(progressData || {}).some(task => task?.type === 'embedding');
+            const hasStoring = Object.values(progressData || {}).some(task => task?.type === 'storing');
+            
+            if (!hasEmbedding) {
+              console.warn("⚠️ No embedding progress data found in response!");
+            }
+            
+            if (!hasStoring) {
+              console.warn("⚠️ No storing progress data found in response!");
+            }
+          }
           
           // Extract all tasks
           const tasks = Object.values(progressData);
@@ -134,8 +322,11 @@ const LoadDataPage = () => {
             // Clear the polling interval
             clearInterval(pollInterval);
             
-            // Reset processed files tracking for next upload
-            setProcessedFiles(new Set());
+            // Reset progress data and processed files tracking for next upload
+            setTimeout(() => {
+              setProgressData({});
+              setProcessedFiles(new Set());
+            }, 3000); // Clear progress after 3 seconds to let user see the completion
           }
         } catch (error) {
           console.error('Error checking progress:', error);
@@ -298,7 +489,7 @@ const LoadDataPage = () => {
         Load Data
       </Typography>
       
-      <LoadingIndicator loading={loading} />
+      <LoadingIndicator loading={loading} progressData={progressData} />
       
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>

@@ -59,10 +59,16 @@ manager = ConnectionManager()
 def progress_callback(progress_data):
     if manager.active_connections:
         # We can't use await directly in a non-async function, so create a task
-        # Add debug information
+        # More detailed debug information for progress updates
         print(f"Progress update received: {len(progress_data)} tasks")
         for task_id, task in progress_data.items():
-            print(f"Task {task_id}: {task.get('type', 'unknown')} - {task.get('message', 'no message')}")
+            task_type = task.get('type', 'unknown')
+            # Print more details for embedding and storing tasks
+            if task_type in ['embedding', 'storing']:
+                percentage = task.get('percentage', 0)
+                message = task.get('message', 'no message')
+                timestamp = task.get('timestamp', 0)
+                print(f"PROGRESS {task_id}: {task_type.upper()} - {percentage:.1f}% - {message} (t={timestamp})")
         
         asyncio.create_task(manager.broadcast(json.dumps(progress_data)))
 

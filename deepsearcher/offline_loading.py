@@ -24,6 +24,62 @@ USE_PARALLEL_EMBEDDING = os.environ.get("DEEPSEARCHER_PARALLEL_EMBEDDING", "true
 # Get flag for using background worker from environment
 USE_BACKGROUND_WORKER = os.environ.get("DEEPSEARCHER_BACKGROUND_WORKER", "true").lower() in ("true", "1", "yes", "y")
 
+# Helper function to update embedding progress in the UI
+def update_embedding_progress(task_id, batch_idx, batch_count, chunk_count, stage="start"):
+    """
+    Update the embedding progress indicator in the UI.
+    
+    Args:
+        task_id: Task ID
+        batch_idx: Current batch index
+        batch_count: Total number of batches
+        chunk_count: Number of chunks in the current batch
+        stage: Current stage of the embedding process ('start', 'processing', 'complete')
+    """
+    # Calculate progress percentage based on batch position
+    progress = (batch_idx / max(1, batch_count)) * 100
+    
+    # Adjust progress based on stage within the batch
+    if stage == "start":
+        message = f"🔢 Starting embedding for batch {batch_idx+1}/{batch_count} ({chunk_count} chunks)"
+    elif stage == "processing":
+        # Add a little progress to show we're working on this batch
+        progress = min(progress + ((1.0 / batch_count) * 0.5), 100)
+        message = f"🔢 Embedding batch {batch_idx+1}/{batch_count} in progress ({chunk_count} chunks)"
+    elif stage == "complete":
+        # Move to the end of this batch's progress allocation
+        progress = min(((batch_idx + 1) / max(1, batch_count)) * 100, 100)
+        message = f"🔢 Completed embedding for batch {batch_idx+1}/{batch_count} ({chunk_count} chunks)"
+    
+    # Update the progress indicator
+    log.update_stage_progress(task_id, "Embedding Generation", "embedding", progress, message)
+
+# Helper function to update vector database insertion progress in the UI    
+def update_storing_progress(task_id, batch_idx, batch_count, chunk_count, stage="start"):
+    """
+    Update the vector database insertion progress indicator in the UI.
+    
+    Args:
+        task_id: Task ID
+        batch_idx: Current batch index
+        batch_count: Total number of batches
+        chunk_count: Number of chunks in the current batch
+        stage: Current stage of the insertion process ('start', 'complete')
+    """
+    # Calculate progress percentage based on batch position
+    progress = (batch_idx / max(1, batch_count)) * 100
+    
+    # Adjust progress based on stage within the batch
+    if stage == "start":
+        message = f"💾 Starting database insertion for batch {batch_idx+1}/{batch_count} ({chunk_count} chunks)"
+    elif stage == "complete":
+        # Move to the end of this batch's progress allocation
+        progress = min(((batch_idx + 1) / max(1, batch_count)) * 100, 100)
+        message = f"💾 Completed database insertion for batch {batch_idx+1}/{batch_count} ({chunk_count} chunks)"
+    
+    # Update the progress indicator
+    log.update_stage_progress(task_id, "Database Storage", "storing", progress, message)
+
 
 def _load_single_path(path: str, file_loader) -> List:
     if os.path.isdir(path):
@@ -100,6 +156,11 @@ def load_from_local_files(
     
     # Get all file paths first, expanding directories
     log.color_print(f"🔍 Scanning for files to process...", task_id=task_id)
+    
+    # Initialize file loading progress at 0%
+    log.update_stage_progress(task_id, "File Loading", "loading", 0,
+                            f"🔍 Scanning for files to process...")
+    
     all_file_paths = []
     supported_files_count = 0
     unsupported_files_count = 0
@@ -159,6 +220,11 @@ def load_from_local_files(
     
     log.color_print(f"📊 File scan complete: {supported_files_count} supported files found, {unsupported_files_count} unsupported files skipped")
     
+    # Update loading progress to indicate scan is complete
+    scan_complete_pct = 15  # Scanning is ~15% of the loading process
+    log.update_stage_progress(task_id, "File Loading", "loading", scan_complete_pct,
+                            f"📚 Found {len(all_file_paths)} files to process")
+    
     # Use multiprocessing for file loading
     log.color_print(f"📚 Starting file loading with {max_workers if max_workers else multiprocessing.cpu_count() - 1} workers...", task_id=task_id, progress_type="loading")
     
@@ -194,7 +260,18 @@ def load_from_local_files(
                     
                     # Update progress inline
                     progress_pct = (completed / total_files) * 100
-                    log.inline_progress(f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)", task_id=task_id, progress_type="loading")
+                    
+                    # Scale the progress to be between scan_complete_pct and 95%
+                    # This gives 15% for scanning, 80% for actual loading, 5% for post-processing
+                    scaled_progress = scan_complete_pct + (progress_pct * (95.0 - scan_complete_pct) / 100.0)
+                    
+                    # Update the frontend progress indicator
+                    log.update_stage_progress(task_id, "File Loading", "loading", scaled_progress,
+                                            f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)")
+                    
+                    # Also update inline for terminal display
+                    log.inline_progress(f"📚 Loading files: {completed}/{total_files} ({progress_pct:.1f}%)", 
+                                       task_id=task_id, progress_type="loading")
                     
                     # Additional details for periodic detailed updates
                     if i % 10 == 0 or i == total_files - 1:  # Less frequent detailed updates
@@ -234,6 +311,10 @@ def load_from_local_files(
     log.color_print(f"📊 File loading complete: {success_count} files loaded successfully, {error_count} files failed")
     log.color_print(f"📄 Total documents extracted: {total_docs}")
     
+    # NOW we can mark file loading as 100% complete - after all files are actually loaded
+    log.update_stage_progress(task_id, "File Loading", "loading", 100,
+                            f"📚 Loaded {total_docs} documents successfully")
+    
     # Process documents in batches for streaming insertion
     # Use the provided batch size or the global default from environment variable
     batch_size = doc_batch_size if doc_batch_size is not None else DOC_BATCH_SIZE
@@ -242,8 +323,18 @@ def load_from_local_files(
     total_chunks_processed = 0
     batch_count = len(doc_batches)
     
+    log.update_stage_progress(task_id, "Text Chunking", "chunking", 0,
+                            f"✂️ Starting document chunking...")
+                            
+    # Initialize embedding and storing progress at 0%
+    log.update_stage_progress(task_id, "Embedding Generation", "embedding", 0,
+                            f"🔢 Waiting to start embedding...")
+                            
+    log.update_stage_progress(task_id, "Database Storage", "storing", 0,
+                            f"💾 Waiting to store vectors...")
+    
     log.color_print(f"🔄 Processing {total_docs} documents in {batch_count} batches (batch size: {batch_size})...",
-                    task_id=task_id, progress_type="processing")
+                   task_id=task_id, progress_type="processing")
     
     for batch_idx, doc_batch in enumerate(doc_batches):
         batch_docs_count = len(doc_batch)
@@ -256,14 +347,22 @@ def load_from_local_files(
         log.color_print(f"✂️ Splitting batch {batch_idx+1} documents into chunks (size: {chunk_size}, overlap: {chunk_overlap})...",
                        task_id=f"{task_id}_split_{batch_idx}", progress_type="chunking")
         
+        # Calculate progress range for this batch's chunking process
+        # Each batch gets a slice of the overall progress
+        batch_base_progress = (batch_idx / batch_count) * 100
+        batch_target_progress = ((batch_idx + 1) / batch_count) * 100
+        
         batch_chunks = split_docs_to_chunks(
             doc_batch,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
-            task_id=f"{task_id}_split_{batch_idx}"
+            task_id=task_id,  # Use main task ID for better progress tracking
+            base_progress=batch_base_progress,
+            target_progress=batch_target_progress
         )
         
         batch_chunk_count = len(batch_chunks)
+                          
         log.color_print(f"🧩 Created {batch_chunk_count} chunks from batch {batch_idx+1} documents",
                        task_id=f"{task_id}_split_{batch_idx}", progress_type="chunking")
         
@@ -375,6 +474,10 @@ def load_from_website(
     
     log.color_print(f"🔄 Starting website loading process...", task_id=task_id)
     
+    # Initialize file loading progress at 0%
+    log.update_stage_progress(task_id, "File Loading", "loading", 0,
+                            f"🌐 Preparing to crawl websites...")
+    
     if isinstance(urls, str):
         urls = [urls]
     vector_db = configuration.vector_db
@@ -403,6 +506,10 @@ def load_from_website(
     success_count = 0
     error_count = 0
     
+    # Update loading progress to show we're about to crawl
+    log.update_stage_progress(task_id, "File Loading", "loading", 10,
+                            f"🌐 Starting to crawl {len(urls)} websites...")
+    
     for i, url in enumerate(tqdm(urls, desc="Loading from websites")):
         log.color_print(f"🔍 Crawling website {i+1}/{len(urls)}: {url}")
         try:
@@ -411,6 +518,12 @@ def load_from_website(
                 page_count = len(docs)
                 all_docs.extend(docs)
                 success_count += 1
+                
+                # Update loading progress during crawling
+                loading_progress = 10 + ((i + 1) / len(urls) * 85)  # Scale from 10% to 95%
+                log.update_stage_progress(task_id, "File Loading", "loading", loading_progress,
+                                        f"🌐 Crawled {i+1}/{len(urls)} websites - {len(all_docs)} documents found")
+                
                 log.color_print(f"✅ Successfully crawled {url} ({page_count} pages/documents extracted)")
             else:
                 error_count += 1
@@ -427,6 +540,10 @@ def load_from_website(
     log.color_print(f"📊 Web crawling complete: {success_count} sites crawled successfully, {error_count} sites failed")
     log.color_print(f"📄 Total documents extracted: {total_docs}")
     
+    # Mark file loading as 100% complete - after all websites are crawled
+    log.update_stage_progress(task_id, "File Loading", "loading", 100,
+                            f"🌐 Crawled {len(urls)} websites, found {total_docs} documents")
+    
     # Process documents in batches for streaming insertion
     # Use the provided batch size or the global default from environment variable
     batch_size = doc_batch_size if doc_batch_size is not None else DOC_BATCH_SIZE
@@ -435,8 +552,15 @@ def load_from_website(
     total_chunks_processed = 0
     batch_count = len(doc_batches)
     
-    # Generate a task_id for this web processing job
-    task_id = f"web_{int(time.time())}"
+    # Initialize chunking, embedding and storing progress at 0%
+    log.update_stage_progress(task_id, "Text Chunking", "chunking", 0,
+                            f"✂️ Starting document chunking...")
+                            
+    log.update_stage_progress(task_id, "Embedding Generation", "embedding", 0,
+                            f"🔢 Waiting to start embedding...")
+                            
+    log.update_stage_progress(task_id, "Database Storage", "storing", 0,
+                            f"💾 Waiting to store vectors...")
     
     log.color_print(f"🔄 Processing {total_docs} documents in {batch_count} batches (batch size: {batch_size})...",
                    task_id=task_id, progress_type="processing")
@@ -452,9 +576,15 @@ def load_from_website(
         log.color_print(f"✂️ Splitting batch {batch_idx+1} documents into chunks...",
                        task_id=f"{task_id}_split_{batch_idx}", progress_type="chunking")
         
+        # Calculate progress range for this batch's chunking process
+        batch_base_progress = (batch_idx / batch_count) * 100
+        batch_target_progress = ((batch_idx + 1) / batch_count) * 100
+        
         batch_chunks = split_docs_to_chunks(
             doc_batch,
-            task_id=f"{task_id}_split_{batch_idx}"
+            task_id=task_id,  # Use main task ID for better progress tracking
+            base_progress=batch_base_progress,
+            target_progress=batch_target_progress
         )
         
         batch_chunk_count = len(batch_chunks)
