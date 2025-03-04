@@ -18,4 +18,16 @@ def generate_gap_queries(
     )
     chat_response = llm.chat([{"role": "user", "content": reflect_prompt}])
     response_content = chat_response.content
-    return llm.literal_eval(response_content), chat_response.total_tokens
+    
+    try:
+        result = llm.literal_eval(response_content)
+        # Ensure we always return a list, not a tuple
+        if isinstance(result, tuple):
+            result = list(result)
+        elif not isinstance(result, list):
+            # If it's not a list or tuple, make it a single-item list
+            result = [result] if result else []
+        return result, chat_response.total_tokens
+    except Exception as e:
+        # If we can't parse the response, return an empty list
+        return [], chat_response.total_tokens

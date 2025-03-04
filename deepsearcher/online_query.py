@@ -69,17 +69,22 @@ async def async_retrieve(
         search_res_from_internet = []  # TODO
 
         # Create all search tasks
-        search_tasks = [
-            search_chunks_from_vectordb(query, sub_gap_queries)
-            for query in sub_gap_queries
-        ]
+        # Ensure we don't search with empty queries
+        search_tasks = []
+        for query in sub_gap_queries:
+            if query:  # Only add non-empty queries
+                search_tasks.append(search_chunks_from_vectordb(query, sub_gap_queries))
         # Execute all tasks in parallel and wait for results
-        search_results = await asyncio.gather(*search_tasks)
-        # Merge all results
-        for result in search_results:
-            search_res, consumed_token = result
-            total_tokens += consumed_token
-            search_res_from_vectordb.extend(search_res)
+        if search_tasks:
+            search_results = await asyncio.gather(*search_tasks)
+            # Merge all results
+            for result in search_results:
+                search_res, consumed_token = result
+                total_tokens += consumed_token
+                search_res_from_vectordb.extend(search_res)
+        else:
+            # No valid search tasks
+            log.color_print("<think> No valid search queries for this iteration. Skipping search. </think>\n")
 
         search_res_from_vectordb = deduplicate_results(search_res_from_vectordb)
         # search_res_from_internet = deduplicate_results(search_res_from_internet)
