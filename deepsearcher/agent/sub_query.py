@@ -30,9 +30,11 @@ Provide your response in list of str format:
 
 def generate_sub_queries(original_query: str) -> Tuple[List[str], int]:
     llm = configuration.llm
+    formatted_content = PROMPT.format(original_query=original_query)
+    
     chat_response = llm.chat(
         messages=[
-            {"role": "user", "content": PROMPT.format(original_query=original_query)}
+            {"role": "user", "content": formatted_content}
         ]
     )
     response_content = chat_response.content

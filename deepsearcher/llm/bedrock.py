@@ -26,7 +26,11 @@ class Bedrock(BaseLLM):
     def format_prompt_content(self, content: str) -> Union[str, List[Dict]]:
         """Format prompt content specifically for Bedrock models like Nova"""
         if self.model in ["amazon.nova-lite-v1:0", "us.amazon.nova-lite-v1:0", "amazon.nova-pro-v1:0","amazon.nova-micro-v1:0"]:
-            return [{'text': content}]
+            if isinstance(content, list):
+                # Already formatted properly
+                return content
+            else:
+                return [{'text': content}]
         return content
         
     def create_user_message(self, content: Union[str, List[Dict]]) -> Dict:
