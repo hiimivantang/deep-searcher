@@ -3,6 +3,7 @@ provide_settings:
     provider: "Bedrock"
     config:
       model: "amazon.nova-micro-v1:0"  
+      region_name: "YOUR_REGION" 
       aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
       aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
 
@@ -10,6 +11,7 @@ provide_settings:
     provider: "BedrockEmbedding"
     config:
       model: "amazon.titan-embed-text-v2:0"
+      region_name: "YOUR_REGION" 
       aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
       aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
 
