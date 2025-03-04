@@ -5,7 +5,7 @@ import boto3
 from deepsearcher.llm.base import BaseLLM, ChatResponse
 
 class Bedrock(BaseLLM):
-    def __init__(self, model: str = "amazon.nova-lite-v1:0", **kwargs):
+    def __init__(self, model: str = "amazon.nova-micro-v1:0", **kwargs):
         self.model = model
 
         aws_access_key_id = kwargs.pop("aws_access_key_id", os.getenv("AWS_ACCESS_KEY_ID"))
@@ -43,10 +43,14 @@ class Bedrock(BaseLLM):
         # Format the messages properly for Bedrock
         formatted_messages = []
         for message in messages:
-            if message["role"] == "user":
-                # Apply content formatting for user messages
-                content = self.format_prompt_content(message["content"])
-                formatted_messages.append({"role": "user", "content": content})
+            role = message["role"]
+            if role == "user":
+                # For Nova models, content must be a list of dictionaries
+                if self.model in ["amazon.nova-lite-v1:0", "us.amazon.nova-lite-v1:0", "amazon.nova-pro-v1:0", "amazon.nova-micro-v1:0"]:
+                    content = self.format_prompt_content(message["content"])
+                    formatted_messages.append({"role": role, "content": content})
+                else:
+                    formatted_messages.append(message)
             else:
                 formatted_messages.append(message)
         
