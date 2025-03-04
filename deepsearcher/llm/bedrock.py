@@ -10,10 +10,12 @@ class Bedrock(BaseLLM):
 
         aws_access_key_id = kwargs.pop("aws_access_key_id", os.getenv("AWS_ACCESS_KEY_ID"))
         aws_secret_access_key = kwargs.pop("aws_secret_access_key", os.getenv("AWS_SECRET_ACCESS_KEY"))
+        
+        region_name = kwargs.pop(region_name, os.getenv("region_name")
 
         self.client = boto3.client(
             service_name="bedrock-runtime",
-            region_name="us-east-1", #FIXME
+            region_name=region_name, #FIXME
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
         )

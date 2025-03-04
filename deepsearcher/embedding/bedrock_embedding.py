@@ -31,6 +31,7 @@ class BedrockEmbedding(BaseEmbedding):
 
         aws_access_key_id = kwargs.pop("aws_access_key_id", os.getenv("AWS_ACCESS_KEY_ID"))
         aws_secret_access_key = kwargs.pop("aws_secret_access_key", os.getenv("AWS_SECRET_ACCESS_KEY"))
+        region_name = kwargs.pop("region_name", os.getenv("region_name"))
 
         if model in {None, DEFAULT_MODEL_ID} and "model_name" in kwargs:
             model = kwargs.pop("model_name") #overwrites `model` with `model_name`
@@ -39,7 +40,7 @@ class BedrockEmbedding(BaseEmbedding):
 
         #TODO: initiate boto3 client
         self.client = boto3.client("bedrock-runtime", 
-                                    region_name="us-east-1", #FIXME: allow users to specify
+                                    region_name=region_name, #FIXME: allow users to specify
                                     aws_access_key_id=aws_access_key_id,
                                     aws_secret_access_key=aws_secret_access_key)
         
