@@ -25,7 +25,7 @@ class Bedrock(BaseLLM):
         
     def format_prompt_content(self, content: str) -> Union[str, List[Dict]]:
         """Format prompt content specifically for Bedrock models like Nova"""
-        if self.model in ["amazon.nova-lite-v1:0", "us.amazon.nova-lite-v1:0", "amazon.nova-pro-v1:0","amazon.nova-micro-v1:0"]:
+        if self.model in ["amazon.nova-micro-v1:0"]:
             if isinstance(content, list):
                 # Already formatted properly
                 return content
@@ -50,7 +50,7 @@ class Bedrock(BaseLLM):
             role = message["role"]
             if role == "user":
                 # For Nova models, content must be a list of dictionaries
-                if self.model in ["amazon.nova-lite-v1:0", "us.amazon.nova-lite-v1:0", "amazon.nova-pro-v1:0", "amazon.nova-micro-v1:0"]:
+                if self.model in ["amazon.nova-micro-v1:0"]:
                     content = self.format_prompt_content(message["content"])
                     formatted_messages.append({"role": role, "content": content})
                 else:
