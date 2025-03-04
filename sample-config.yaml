@@ -2,7 +2,7 @@ provide_settings:
   llm:
     provider: "Bedrock"
     config:
-      model: "amazon.nova-micro-v1:0"  
+      model: "us.amazon.nova-micro-v1:0"  
       region_name: "YOUR_REGION" 
       aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
       aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
